@@ -3,8 +3,12 @@ import moderngl
 import numpy as np
 import imgui
 from moderngl_window.integrations.imgui import ModernglWindowRenderer
+import imageio
+import os
 
-
+SOURCE_PATH = os.path.dirname(__file__)
+OUTPUT_DIRPATH = os.path.join(SOURCE_PATH, "output")
+out_path = f"{OUTPUT_DIRPATH}/slime.gif"
 
 class config:
     width = 1920.0
@@ -12,7 +16,7 @@ class config:
 
     decay_rate = 5.0
     diffuse_speed = 10.0
-    particle_speed  = 50.0
+    particle_speed  = 80.0
     turn_range = 50
     sensor_dist = 10.0
     sensor_angle = np.pi/4
@@ -43,17 +47,19 @@ class App(mglw.WindowConfig):
         self.imgui = ModernglWindowRenderer(self.wnd)
 
         self.particle_count = 1000000
-        self.addPart = False
 
-        self.updateSpeed = 1/60
-        self.last_time = 0.0
+
+        self.frame_num = 0
+        self.record = False
+
+        self.gif_imgs = []
 
         self.width, self.height = (int(config.width), int(config.height))
 
         self.render_program = self.load_program(vertex_shader='vertex_shader.glsl', fragment_shader='fragment_shader.glsl')
         self.render_program['srcTex'] = 0
 
-        self.particles = generate_particles(self.particle_count, self.width/3, self.height/3, 200.0)
+        self.particles = generate_particles(self.particle_count, self.width/2, self.height/2, 350.0)
 
         self.particle_buffer = self.ctx.buffer(data=self.particles.tobytes(), dynamic=True)
         self.next_batch = self.ctx.buffer(reserve=self.particles.nbytes, dynamic=True)
@@ -161,6 +167,21 @@ class App(mglw.WindowConfig):
         self.decay.transform(self.texture_buffer, vertices=self.width * self.height)
         self.texture_read.write(self.texture_buffer)
 
+
+        if self.record:
+            frame = np.frombuffer(self.texture_buffer.read(), dtype=np.float32)
+            frame = frame.reshape((self.height, self.width))
+            frame = np.stack([frame, np.zeros((self.height, self.width)), np.zeros((self.height, self.width))], axis=-1)
+            frame = np.multiply(frame, 255).astype(np.uint8)
+
+            self.gif_imgs.append(frame)
+
+            if(self.frame_num == 420):
+                imageio.mimwrite(out_path, self.gif_imgs, "GIF", fps=60)
+
+
+
+        self.frame_num += 1
         self.render_ui()
 
 
